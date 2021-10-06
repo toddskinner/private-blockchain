@@ -64,6 +64,7 @@ class Blockchain {
     _addBlock(block) {
         let self = this;
         return new Promise(async (resolve, reject) => {
+            let validChain = this.validateChain();
             let currentChainHeight = this.height;
             console.log('currentChainHeight: ' + currentChainHeight);
 
@@ -82,8 +83,12 @@ class Blockchain {
             console.log('block hash: ' + block.hash);
             
             // add block to chain
-            self.chain.push(block);
-            resolve(block);
+            if(validChain){
+                self.chain.push(block);
+                resolve(block);
+            } else {
+                reject('Chain not vaild');
+            }
         });
     }
 
@@ -223,21 +228,29 @@ class Blockchain {
         let errorLog = [];
         return new Promise(async (resolve, reject) => {
             self.chain.forEach(async(block) => {
-                if(!BlockClass.Block.validate(block)){
-                    errorLog.push('Error at block: ' + block.hash);
+                
+                const validated = block.validate();
+                let prevHashCorrect = true;
+                
+                if(block.height > 0){
+                    let currentBlockPrevHash = block.previousBlockHash;
+                    let prevBlockHash = self.chain[(block.height)-1].hash;
+    
+                    if(currentBlockPrevHash !== prevBlockHash){
+                        prevHashCorrect = false;
+                    }
+                }
+
+                if(!validated || !prevHashCorrect){
+                    errorLog.push(block.hash);
+                    console.log('Error with block with hash: ' + block.hash);
                 }
             });
-            for(let x = 1; x <= self.height; x++){
-                let currentBlockPrevHash = self.chain[x].previousBlockHash;
-                let prevBlockHash = self.chain[x-1].hash;
-                if(currentBlockPrevHash !== prevBlockHash){
-                    errorLog.push('Prev hash incorrect at block: ' + self.chain[x].hash);
-                }
-            }   
+            
             if(errorLog.length !== 0){    
-                resolve('Blockchain contains ' + errorLog.length + ' error(s)')
+                resolve(false)
             } else {
-                resolve('Blockchain validated with 0 errors');
+                resolve(true);
             } 
         });
     }
