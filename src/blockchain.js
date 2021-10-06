@@ -64,30 +64,35 @@ class Blockchain {
     _addBlock(block) {
         let self = this;
         return new Promise(async (resolve, reject) => {
-            let validChain = this.validateChain();
-            let currentChainHeight = this.height;
+            
+            const validChain = await self.validateChain();
+
+            let currentChainHeight = self.height;
             console.log('currentChainHeight: ' + currentChainHeight);
 
-            if (currentChainHeight>=0) {
+            if (currentChainHeight >= 0) {
                 // previous block hash
                 block.previousBlockHash = self.chain[currentChainHeight].hash;
             }
 
             self.height = currentChainHeight + 1;
             block.height = currentChainHeight + 1;
+            block.time = new Date().getTime().toString().slice(0, -3);
             
             // SHA256 requires a string of data
             block.hash = SHA256(JSON.stringify(block)).toString();
-            block.time = new Date().getTime().toString().slice(0, -3);
+        
             console.log('block body: ' + JSON.stringify(block));
             console.log('block hash: ' + block.hash);
             
             // add block to chain
-            if(validChain){
+            if(validChain.length !== 0){
+                console.log('Chain not valid');
+                resolve('Chain not vaild');
+            } else {
+                console.log('Chain valid');
                 self.chain.push(block);
                 resolve(block);
-            } else {
-                reject('Chain not vaild');
             }
         });
     }
@@ -106,8 +111,6 @@ class Blockchain {
             resolve(`${address}:${currentTime}:starRegistry`)
         });
     }
-
-    /* bc1qg8vae34sxl3uvjdc2zcp9p25zrmfa95r7jv9ge */
 
     /**
      * The submitStar(address, message, signature, star) method
@@ -135,7 +138,7 @@ class Blockchain {
             let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
             console.log('currentTime: ' + currentTime);
 
-            // if((currentTime - messageTime) < (5 * 60)){
+            if((currentTime - messageTime) < (5 * 60)){
                 const verified = bitcoinMessage.verify(message, address, signature);
                 if(verified){
                     const block = new BlockClass.Block({
@@ -148,9 +151,9 @@ class Blockchain {
                 } else {
                     reject('Signature is invalid');
                 }
-            // } else {
-            //     reject('Exceeded 5 min time limit');
-            // }
+            } else {
+                reject('Exceeded 5 min time limit');
+            }
         });
     }
 
@@ -226,32 +229,28 @@ class Blockchain {
     validateChain() {
         let self = this;
         let errorLog = [];
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             self.chain.forEach(async(block) => {
-                
-                const validated = block.validate();
-                let prevHashCorrect = true;
-                
-                if(block.height > 0){
-                    let currentBlockPrevHash = block.previousBlockHash;
-                    let prevBlockHash = self.chain[(block.height)-1].hash;
-    
-                    if(currentBlockPrevHash !== prevBlockHash){
-                        prevHashCorrect = false;
-                    }
-                }
+                const validated = await block.validate();
 
-                if(!validated || !prevHashCorrect){
+                if(!validated){
                     errorLog.push(block.hash);
-                    console.log('Error with block with hash: ' + block.hash);
+                    console.log('Error: not validated via validate function: ' + block.hash);
+                } else {
+                    
+                    if(block.height > 0){
+                        let currentBlockPrevHash = block.previousBlockHash;
+                        let prevBlockHash = self.chain[(block.height)-1].hash;
+        
+                        if(currentBlockPrevHash !== prevBlockHash){
+                            errorLog.push(block.hash);
+                            console.log('Error: not validated due to prev hash check: ' + block.hash);
+                        }
+                    }
                 }
             });
             
-            if(errorLog.length !== 0){    
-                resolve(false)
-            } else {
-                resolve(true);
-            } 
+            resolve(errorLog);
         });
     }
 
